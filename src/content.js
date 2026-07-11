@@ -72,7 +72,8 @@
       "dc.source"
     ])
       || jsonLdText(articleSection, "name")
-      || jsonLdText(article.publisher, "name");
+      || jsonLdText(article.publisher, "name")
+      || (/researchsquare\.com$/i.test(location.hostname) ? "Research Square" : "");
     const date = firstMeta([
       "citation_publication_date",
       "citation_date",

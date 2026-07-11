@@ -2,10 +2,13 @@ import {
   DEFAULT_SETTINGS,
   buildFilename,
   extractDoi,
+  extractPii,
+  extractResearchSquareId,
   filenameToTitle,
   isLikelyPaperDownload,
   mergeMetadata,
   normalizeComparableUrl,
+  researchSquareDoi,
   titleSimilarity
 } from "./metadata.js";
 
@@ -81,12 +84,20 @@ async function readPageMetadata(item) {
   const records = Array.isArray(result[PAGE_METADATA_KEY]) ? result[PAGE_METADATA_KEY] : [];
   const referrer = normalizeComparableUrl(item.referrer);
   const downloadUrl = normalizeComparableUrl(item.url);
+  const finalUrl = normalizeComparableUrl(item.finalUrl);
+  const researchSquareId = extractResearchSquareId([
+    item.url,
+    item.finalUrl,
+    item.referrer
+  ].join(" "));
 
   const exact = records.find((record) => {
     const pageUrl = normalizeComparableUrl(record.pageUrl);
     const pdfUrl = normalizeComparableUrl(record.pdfUrl);
     return (referrer && (referrer === pageUrl || referrer === pdfUrl))
-      || (downloadUrl && (downloadUrl === pageUrl || downloadUrl === pdfUrl));
+      || (downloadUrl && (downloadUrl === pageUrl || downloadUrl === pdfUrl))
+      || (finalUrl && (finalUrl === pageUrl || finalUrl === pdfUrl))
+      || (researchSquareId && researchSquareId === extractResearchSquareId(`${record.pageUrl} ${record.pdfUrl}`));
   });
   return exact?.metadata || {};
 }
@@ -152,14 +163,52 @@ async function fetchCrossrefByTitle(title) {
   return best && best.score >= 0.72 ? crossrefMessageToMetadata(best.item) : {};
 }
 
+async function fetchPubmedByPii(pii) {
+  const term = encodeURIComponent(`"${pii}"[All Fields]`);
+  const search = await fetchJson(
+    `https://eutils.ncbi.nlm.nih.gov/entrez/eutils/esearch.fcgi?db=pubmed&term=${term}&retmode=json&retmax=1`
+  );
+  const pmid = search.esearchresult?.idlist?.[0];
+  if (!pmid) return {};
+
+  const summary = await fetchJson(
+    `https://eutils.ncbi.nlm.nih.gov/entrez/eutils/esummary.fcgi?db=pubmed&id=${encodeURIComponent(pmid)}&retmode=json`
+  );
+  const record = summary.result?.[pmid];
+  if (!record) return {};
+  const doi = record.articleids?.find((item) => item.idtype === "doi")?.value || "";
+  return {
+    title: record.title || "",
+    journal: record.fulljournalname || record.source || "",
+    year: record.pubdate?.match(/(?:19|20)\d{2}/)?.[0] || "",
+    doi
+  };
+}
+
 async function resolveMetadata(item, settings) {
   let metadata = await readPageMetadata(item);
+  const sourceUrls = [
+    item.url,
+    item.finalUrl,
+    item.referrer,
+    item.filename
+  ].join(" ");
+  const discoveredResearchSquareDoi = researchSquareDoi(sourceUrls);
   const discoveredDoi = extractDoi([
     metadata.doi,
     item.url,
+    item.finalUrl,
     item.referrer,
     item.filename
+  ].join(" ")) || discoveredResearchSquareDoi;
+  const discoveredPii = extractPii([
+    item.url,
+    item.finalUrl,
+    item.filename
   ].join(" "));
+  if (!metadata.journal && extractResearchSquareId(sourceUrls)) {
+    metadata = { ...metadata, journal: "Research Square" };
+  }
   if (discoveredDoi && !metadata.doi) metadata = { ...metadata, doi: discoveredDoi };
 
   if (settings.useCrossref) {
@@ -172,6 +221,14 @@ async function resolveMetadata(item, settings) {
       metadata = mergeMetadata(metadata, remote);
     } catch (error) {
       console.warn("Crossref metadata lookup failed", error);
+    }
+  }
+
+  if (!metadata.title && discoveredPii && settings.usePubMed) {
+    try {
+      metadata = mergeMetadata(metadata, await fetchPubmedByPii(discoveredPii));
+    } catch (error) {
+      console.warn("PubMed PII lookup failed", error);
     }
   }
 
