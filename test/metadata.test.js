@@ -2,6 +2,7 @@ import test from "node:test";
 import assert from "node:assert/strict";
 import {
   buildFilename,
+  extractBioRxivDoi,
   extractDoi,
   extractPii,
   extractResearchSquareId,
@@ -38,6 +39,12 @@ test("extractDoi supports DOI URLs and strips punctuation", () => {
     extractDoi("See https://doi.org/10.1038/s41586-024-01234-5."),
     "10.1038/s41586-024-01234-5"
   );
+});
+
+test("bioRxiv PDF URLs normalize versioned DOI suffixes", () => {
+  const url = "https://www.biorxiv.org/content/10.1101/2023.12.15.571823v1.full.pdf";
+  assert.equal(extractBioRxivDoi(url), "10.1101/2023.12.15.571823");
+  assert.equal(isLikelyPaperDownload({ mime: "application/pdf", url }), true);
 });
 
 test("extractPii supports encoded Cell PDF URLs", () => {

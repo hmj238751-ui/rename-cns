@@ -6,6 +6,7 @@ export const DEFAULT_SETTINGS = {
 };
 
 const DOI_PATTERN = /\b10\.\d{4,9}\/[\-._;()/:A-Z0-9]+\b/i;
+const BIORXIV_DOI_PATTERN = /10\.1101\/\d{4}\.\d{2}\.\d{2}\.\d+/i;
 const PII_PATTERN = /\bS\d{4,9}-\d{4}\(\d{2}\)\d{4,6}-[0-9A-Z]+\b/i;
 const RESEARCH_SQUARE_ID_PATTERN = /\brs-\d{4,}\b/i;
 const MAX_FILENAME_LENGTH = 180;
@@ -26,6 +27,16 @@ export function extractDoi(value) {
   const match = cleanText(value).match(DOI_PATTERN);
   if (!match) return "";
   return match[0].replace(/[.,;:!?\]})>]+$/g, "");
+}
+
+export function extractBioRxivDoi(value) {
+  let source = cleanText(value);
+  try {
+    source = decodeURIComponent(source);
+  } catch {
+    // Keep the original URL when a publisher returns a malformed escape sequence.
+  }
+  return source.match(BIORXIV_DOI_PATTERN)?.[0] || "";
 }
 
 export function extractPii(value) {
@@ -95,7 +106,8 @@ export function isLikelyPaperDownload(item) {
     || /\.(pdf|epub|djvu|caj)(?:$|[?#\s])/i.test(source)
     || /cell\.com\/action\/showpdf(?:[/?#]|$)/i.test(source)
     || /[?&]pii=S\d{4,9}-\d{4}\(\d{2}\)\d{4,6}-[0-9a-z]+/i.test(source)
-    || /researchsquare\.com\/article\/rs-\d+\/(?:v\d+|latest)(?:\.pdf)?(?:[?#]|$)/i.test(source);
+    || /researchsquare\.com\/article\/rs-\d+\/(?:v\d+|latest)(?:\.pdf)?(?:[?#]|$)/i.test(source)
+    || /biorxiv\.org\/content\/.*(?:\.full)?\.pdf(?:[?#]|$)/i.test(source);
 }
 
 export function sanitizeFilenamePart(value, fallback) {

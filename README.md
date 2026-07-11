@@ -1,7 +1,7 @@
 # 论文文献智能改名 / Paper Auto Renamer
 
-当前版本：1.02（上一版 1.01，初始版本 1.00）<br>
-Current version: 1.02 (previously 1.01; initial release 1.00)
+当前版本：1.03（上一版 1.02，初始版本 1.00）<br>
+Current version: 1.03 (previously 1.02; initial release 1.00)
 
 一个 Chrome/Edge Manifest V3 浏览器扩展，在论文下载开始时，将文件命名为：<br>
 A Chrome/Edge Manifest V3 extension that names downloaded papers as:
@@ -29,6 +29,8 @@ YYYY-Journal-Title.pdf
   Supports Cell `showPdf?pii=...` and Research Square `assets-*.researchsquare.com/files/...` download URLs.
 - 使用 PubMed 解析 Cell PII，并使用文章 ID/版本号匹配 Research Square 页面。<br>
   Uses PubMed for Cell PII and matches Research Square pages by article ID and version.
+- 支持 bioRxiv 的 `10.1101/...v1.full.pdf` 版本化 PDF 地址。<br>
+  Supports versioned bioRxiv PDF URLs such as `10.1101/...v1.full.pdf`.
 - 自动清理操作系统不允许的字符，并处理重名文件。<br>
   Removes filesystem-invalid characters and handles filename conflicts.
 

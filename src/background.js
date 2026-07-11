@@ -1,6 +1,7 @@
 import {
   DEFAULT_SETTINGS,
   buildFilename,
+  extractBioRxivDoi,
   extractDoi,
   extractPii,
   extractResearchSquareId,
@@ -90,6 +91,11 @@ async function readPageMetadata(item) {
     item.finalUrl,
     item.referrer
   ].join(" "));
+  const bioRxivDoi = extractBioRxivDoi([
+    item.url,
+    item.finalUrl,
+    item.referrer
+  ].join(" "));
 
   const exact = records.find((record) => {
     const pageUrl = normalizeComparableUrl(record.pageUrl);
@@ -97,7 +103,8 @@ async function readPageMetadata(item) {
     return (referrer && (referrer === pageUrl || referrer === pdfUrl))
       || (downloadUrl && (downloadUrl === pageUrl || downloadUrl === pdfUrl))
       || (finalUrl && (finalUrl === pageUrl || finalUrl === pdfUrl))
-      || (researchSquareId && researchSquareId === extractResearchSquareId(`${record.pageUrl} ${record.pdfUrl}`));
+      || (researchSquareId && researchSquareId === extractResearchSquareId(`${record.pageUrl} ${record.pdfUrl}`))
+      || (bioRxivDoi && bioRxivDoi === extractBioRxivDoi(`${record.pageUrl} ${record.pdfUrl} ${record.metadata?.doi || ""}`));
   });
   return exact?.metadata || {};
 }
@@ -188,13 +195,15 @@ async function fetchPubmedByPii(pii) {
 async function resolveMetadata(item, settings) {
   let metadata = await readPageMetadata(item);
   const sourceUrls = [
+    metadata.doi,
     item.url,
     item.finalUrl,
     item.referrer,
     item.filename
   ].join(" ");
+  const discoveredBioRxivDoi = extractBioRxivDoi(sourceUrls);
   const discoveredResearchSquareDoi = researchSquareDoi(sourceUrls);
-  const discoveredDoi = extractDoi([
+  const discoveredDoi = discoveredBioRxivDoi || extractDoi([
     metadata.doi,
     item.url,
     item.finalUrl,
@@ -208,6 +217,9 @@ async function resolveMetadata(item, settings) {
   ].join(" "));
   if (!metadata.journal && extractResearchSquareId(sourceUrls)) {
     metadata = { ...metadata, journal: "Research Square" };
+  }
+  if (!metadata.journal && discoveredBioRxivDoi) {
+    metadata = { ...metadata, journal: "bioRxiv" };
   }
   if (discoveredDoi && !metadata.doi) metadata = { ...metadata, doi: discoveredDoi };
 
