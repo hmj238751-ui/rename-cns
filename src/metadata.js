@@ -1,10 +1,14 @@
 export const DEFAULT_SETTINGS = {
   enabled: true,
   useCrossref: true,
+  usePubMed: true,
   allowFilenameFallback: false
 };
 
 const DOI_PATTERN = /\b10\.\d{4,9}\/[\-._;()/:A-Z0-9]+\b/i;
+const BIORXIV_DOI_PATTERN = /10\.1101\/\d{4}\.\d{2}\.\d{2}\.\d+/i;
+const PII_PATTERN = /\bS\d{4,9}-\d{4}\(\d{2}\)\d{4,6}-[0-9A-Z]+\b/i;
+const RESEARCH_SQUARE_ID_PATTERN = /\brs-\d{4,}\b/i;
 const MAX_FILENAME_LENGTH = 180;
 
 export function cleanText(value) {
@@ -25,13 +29,60 @@ export function extractDoi(value) {
   return match[0].replace(/[.,;:!?\]})>]+$/g, "");
 }
 
+export function extractBioRxivDoi(value) {
+  let source = cleanText(value);
+  try {
+    source = decodeURIComponent(source);
+  } catch {
+    // Keep the original URL when a publisher returns a malformed escape sequence.
+  }
+  return source.match(BIORXIV_DOI_PATTERN)?.[0] || "";
+}
+
+export function extractPii(value) {
+  let source = cleanText(value);
+  try {
+    source = decodeURIComponent(source);
+  } catch {
+    // Keep the original URL when a publisher returns a malformed escape sequence.
+  }
+  return source.match(PII_PATTERN)?.[0] || "";
+}
+
+export function extractResearchSquareId(value) {
+  let source = cleanText(value);
+  try {
+    source = decodeURIComponent(source);
+  } catch {
+    // Keep the original URL when a publisher returns a malformed escape sequence.
+  }
+  return source.match(RESEARCH_SQUARE_ID_PATTERN)?.[0].toLowerCase() || "";
+}
+
+export function researchSquareDoi(value) {
+  let source = cleanText(value);
+  try {
+    source = decodeURIComponent(source);
+  } catch {
+    // Keep the original URL when a publisher returns a malformed escape sequence.
+  }
+  const id = extractResearchSquareId(source);
+  const version = source.match(/(?:[a-z0-9-]+\.)*researchsquare\.com\/(?:article|files)\/rs-\d+\/(v\d+)(?:_covered_[^/?#]+)?(?:\/|\.pdf|[?#]|$)/i)?.[1];
+  return id && version ? `10.21203/rs.3.${id}/${version.toLowerCase()}` : "";
+}
+
 export function normalizeComparableUrl(value) {
   if (!value) return "";
   try {
     const url = new URL(value);
     url.hash = "";
-    url.search = "";
-    return `${url.origin}${url.pathname}`.replace(/\/$/, "").toLowerCase();
+    const meaningfulParams = [...url.searchParams.entries()]
+      .filter(([key]) => !/^(utm_|fbclid$|gclid$)/i.test(key))
+      .sort(([left], [right]) => left.localeCompare(right));
+    const query = new URLSearchParams(meaningfulParams).toString();
+    return `${url.origin}${url.pathname}${query ? `?${query}` : ""}`
+      .replace(/\/$/, "")
+      .toLowerCase();
   } catch {
     return cleanText(value).replace(/[?#].*$/, "").replace(/\/$/, "").toLowerCase();
   }
@@ -45,9 +96,18 @@ export function getFileExtension(filename, url = "") {
 }
 
 export function isLikelyPaperDownload(item) {
-  const source = `${item?.mime || ""} ${item?.url || ""} ${item?.filename || ""}`.toLowerCase();
+  let source = `${item?.mime || ""} ${item?.url || ""} ${item?.finalUrl || ""} ${item?.filename || ""}`.toLowerCase();
+  try {
+    source = decodeURIComponent(source);
+  } catch {
+    // The encoded URL is still useful for extension and MIME matching.
+  }
   return /application\/(pdf|epub\+zip|x-djvu|x-caj)/i.test(source)
-    || /\.(pdf|epub|djvu|caj)(?:$|[?#\s])/i.test(source);
+    || /\.(pdf|epub|djvu|caj)(?:$|[?#\s])/i.test(source)
+    || /cell\.com\/action\/showpdf(?:[/?#]|$)/i.test(source)
+    || /[?&]pii=S\d{4,9}-\d{4}\(\d{2}\)\d{4,6}-[0-9a-z]+/i.test(source)
+    || /researchsquare\.com\/article\/rs-\d+\/(?:v\d+|latest)(?:\.pdf)?(?:[?#]|$)/i.test(source)
+    || /biorxiv\.org\/content\/.*(?:\.full)?\.pdf(?:[?#]|$)/i.test(source);
 }
 
 export function sanitizeFilenamePart(value, fallback) {

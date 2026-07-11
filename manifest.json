@@ -1,14 +1,15 @@
 {
   "manifest_version": 3,
   "name": "论文文献智能改名",
-  "version": "0.1.0",
-  "description": "下载论文时，按“年份-发表期刊-文献名称”自动命名文件。",
+  "version": "1.0.3",
+  "description": "自动将论文下载文件命名为年份-期刊-标题。 Automatically rename downloaded papers as year-journal-title.",
   "permissions": [
     "downloads",
     "storage"
   ],
   "host_permissions": [
-    "https://api.crossref.org/*"
+    "https://api.crossref.org/*",
+    "https://eutils.ncbi.nlm.nih.gov/*"
   ],
   "background": {
     "service_worker": "src/background.js",

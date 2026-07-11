@@ -1,7 +1,7 @@
 {
   "name": "paper-auto-renamer",
   "private": true,
-  "version": "0.1.0",
+  "version": "1.0.3",
   "type": "module",
   "scripts": {
     "check": "node --check src/metadata.js && node --check src/background.js && node --check src/content.js && node --check src/popup.js && node --check src/options.js",
