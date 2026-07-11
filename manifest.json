@@ -1,0 +1,34 @@
+{
+  "manifest_version": 3,
+  "name": "论文文献智能改名",
+  "version": "0.1.0",
+  "description": "下载论文时，按“年份-发表期刊-文献名称”自动命名文件。",
+  "permissions": [
+    "downloads",
+    "storage"
+  ],
+  "host_permissions": [
+    "https://api.crossref.org/*"
+  ],
+  "background": {
+    "service_worker": "src/background.js",
+    "type": "module"
+  },
+  "action": {
+    "default_title": "论文文献智能改名",
+    "default_popup": "src/popup.html"
+  },
+  "options_page": "src/options.html",
+  "content_scripts": [
+    {
+      "matches": [
+        "http://*/*",
+        "https://*/*"
+      ],
+      "js": [
+        "src/content.js"
+      ],
+      "run_at": "document_idle"
+    }
+  ]
+}

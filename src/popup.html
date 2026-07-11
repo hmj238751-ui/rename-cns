@@ -1,0 +1,41 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>论文文献智能改名</title>
+  <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+  <main class="panel">
+    <div class="brand">
+      <div class="brand-mark">↗</div>
+      <div>
+        <h1>论文文献智能改名</h1>
+        <div class="muted">下载前自动生成规范文件名</div>
+      </div>
+    </div>
+
+    <section class="status-card">
+      <div>
+        <div class="status-label">下载监听</div>
+        <div class="status-value" id="statusText">读取中…</div>
+      </div>
+      <label class="switch" aria-label="启用或停用自动改名">
+        <input id="enabled" type="checkbox">
+        <span class="slider"></span>
+      </label>
+    </section>
+
+    <h2>最近改名</h2>
+    <ul class="history" id="history"></ul>
+
+    <div class="button-row">
+      <button id="clearHistory">清空记录</button>
+      <button class="primary" id="openOptions">更多设置</button>
+    </div>
+    <div class="note">命名格式：年份-发表期刊-文献名称.pdf</div>
+  </main>
+  <script src="popup.js"></script>
+</body>
+</html>

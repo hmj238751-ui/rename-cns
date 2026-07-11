@@ -1,0 +1,37 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>论文文献智能改名设置</title>
+  <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+  <main class="page">
+    <div class="brand">
+      <div class="brand-mark">↗</div>
+      <div>
+        <h1>论文文献智能改名设置</h1>
+        <div class="muted">让下载的论文更容易检索、归档和复用</div>
+      </div>
+    </div>
+
+    <h2>元数据来源</h2>
+    <label class="setting">
+      <input id="useCrossref" type="checkbox">
+      <span>使用 Crossref 补全文献元数据<small>当页面提供 DOI，或已识别出标题但缺少年份/期刊时，尝试查询 Crossref。</small></span>
+    </label>
+    <label class="setting">
+      <input id="allowFilenameFallback" type="checkbox">
+      <span>无法识别标题时，使用原文件名作为标题<small>建议关闭。很多出版社文件名是内部编号，直接使用会得到不够准确的名称。</small></span>
+    </label>
+
+    <div class="note">扩展只提取当前文章页的公开元标签（如 citation_title、citation_doi），不会上传网页正文。浏览器扩展只能在下载落盘前建议文件名，因此对已经下载完成的旧文件不会自动改名。</div>
+    <div class="button-row">
+      <button class="primary" id="save">保存设置</button>
+      <span class="muted" id="saved"></span>
+    </div>
+  </main>
+  <script src="options.js"></script>
+</body>
+</html>
