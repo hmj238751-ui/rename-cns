@@ -5,6 +5,7 @@ import {
   extractDoi,
   extractPii,
   extractResearchSquareId,
+  extractSilverchairArticleId,
   filenameToTitle,
   isLikelyPaperDownload,
   mergeMetadata,
@@ -96,6 +97,11 @@ async function readPageMetadata(item) {
     item.finalUrl,
     item.referrer
   ].join(" "));
+  const silverchairArticleId = extractSilverchairArticleId([
+    item.url,
+    item.finalUrl,
+    item.referrer
+  ].join(" "));
 
   const exact = records.find((record) => {
     const pageUrl = normalizeComparableUrl(record.pageUrl);
@@ -104,7 +110,8 @@ async function readPageMetadata(item) {
       || (downloadUrl && (downloadUrl === pageUrl || downloadUrl === pdfUrl))
       || (finalUrl && (finalUrl === pageUrl || finalUrl === pdfUrl))
       || (researchSquareId && researchSquareId === extractResearchSquareId(`${record.pageUrl} ${record.pdfUrl}`))
-      || (bioRxivDoi && bioRxivDoi === extractBioRxivDoi(`${record.pageUrl} ${record.pdfUrl} ${record.metadata?.doi || ""}`));
+      || (bioRxivDoi && bioRxivDoi === extractBioRxivDoi(`${record.pageUrl} ${record.pdfUrl} ${record.metadata?.doi || ""}`))
+      || (silverchairArticleId && silverchairArticleId === extractSilverchairArticleId(`${record.pageUrl} ${record.pdfUrl}`));
   });
   return exact?.metadata || {};
 }

@@ -6,6 +6,7 @@ import {
   extractDoi,
   extractPii,
   extractResearchSquareId,
+  extractSilverchairArticleId,
   isLikelyPaperDownload,
   normalizeComparableUrl,
   researchSquareDoi,
@@ -66,6 +67,14 @@ test("Research Square URLs expose a stable article ID and DOI", () => {
   assert.equal(researchSquareDoi(urls[0]), "10.21203/rs.3.rs-9329453/v1");
   assert.equal(researchSquareDoi(urls[1]), "10.21203/rs.3.rs-9329453/v1");
   assert.equal(researchSquareDoi(urls[2]), "10.21203/rs.3.rs-9635406/v1");
+});
+
+test("Silverchair article and watermark PDF URLs expose a stable article ID", () => {
+  const articleUrl = "https://academic.oup.com/ve/article/11/1/veaf045/8176603";
+  const pdfUrl = "https://watermark02.silverchair.com/veaf045.pdf?token=temporary-token";
+  assert.equal(extractSilverchairArticleId(articleUrl), "veaf045");
+  assert.equal(extractSilverchairArticleId(pdfUrl), "veaf045");
+  assert.equal(isLikelyPaperDownload({ mime: "application/octet-stream", url: pdfUrl }), true);
 });
 
 test("URL normalization preserves meaningful PII query parameters", () => {
