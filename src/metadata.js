@@ -9,6 +9,8 @@ const DOI_PATTERN = /\b10\.\d{4,9}\/[\-._;()/:A-Z0-9]+\b/i;
 const BIORXIV_DOI_PATTERN = /10\.1101\/\d{4}\.\d{2}\.\d{2}\.\d+/i;
 const PII_PATTERN = /\bS\d{4,9}-\d{4}\(\d{2}\)\d{4,6}-[0-9A-Z]+\b/i;
 const RESEARCH_SQUARE_ID_PATTERN = /\brs-\d{4,}\b/i;
+const SILVERCHAIR_PDF_PATTERN = /(?:^|https?:\/\/)(?:[a-z0-9-]+\.)*silverchair\.com\/([^/?#\s]+)\.pdf(?:[?#\s]|$)/i;
+const SILVERCHAIR_ARTICLE_PAGE_PATTERN = /\/article\/(?:[^/?#\s]+\/)*([^/?#\s]+)\/\d+(?:[/?#\s]|$)/i;
 const MAX_FILENAME_LENGTH = 180;
 
 export function cleanText(value) {
@@ -59,6 +61,18 @@ export function extractResearchSquareId(value) {
   return source.match(RESEARCH_SQUARE_ID_PATTERN)?.[0].toLowerCase() || "";
 }
 
+export function extractSilverchairArticleId(value) {
+  let source = cleanText(value);
+  try {
+    source = decodeURIComponent(source);
+  } catch {
+    // Keep the original URL when the temporary token contains malformed escapes.
+  }
+  const pdfId = source.match(SILVERCHAIR_PDF_PATTERN)?.[1];
+  const articleId = source.match(SILVERCHAIR_ARTICLE_PAGE_PATTERN)?.[1];
+  return (pdfId || articleId || "").toLowerCase();
+}
+
 export function researchSquareDoi(value) {
   let source = cleanText(value);
   try {
@@ -107,7 +121,8 @@ export function isLikelyPaperDownload(item) {
     || /cell\.com\/action\/showpdf(?:[/?#]|$)/i.test(source)
     || /[?&]pii=S\d{4,9}-\d{4}\(\d{2}\)\d{4,6}-[0-9a-z]+/i.test(source)
     || /researchsquare\.com\/article\/rs-\d+\/(?:v\d+|latest)(?:\.pdf)?(?:[?#]|$)/i.test(source)
-    || /biorxiv\.org\/content\/.*(?:\.full)?\.pdf(?:[?#]|$)/i.test(source);
+    || /biorxiv\.org\/content\/.*(?:\.full)?\.pdf(?:[?#]|$)/i.test(source)
+    || /(?:[a-z0-9-]+\.)*silverchair\.com\/[^/?#\s]+\.pdf(?:[?#\s]|$)/i.test(source);
 }
 
 export function sanitizeFilenamePart(value, fallback) {

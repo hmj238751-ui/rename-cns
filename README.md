@@ -1,6 +1,6 @@
 # 论文文献智能改名
 
-版本：1.03
+版本：1.04
 
 这是一个适用于 Chrome 和 Edge 的浏览器扩展。下载论文时，它会自动将文件命名为：
 
@@ -18,7 +18,7 @@
 
 - 读取论文网页公开的标题、期刊、年份、DOI 等信息，并且监听论文下载，并在文件保存前建议新文件名。
 - 通过 Crossref 和 PubMed 补全文献元数据。
-- 支持 Cell、Research Square、bioRxiv 等常见论文下载地址。
+- 支持 Cell、Research Square、bioRxiv、Silverchair 水印 PDF 等常见论文下载地址。
 
 
 ## 安装
@@ -72,6 +72,7 @@ Windows 用户可以将仓库克隆到“文档”文件夹，再在“加载已
 - Cell 的 PII 下载地址。
 - Research Square 的文章地址和资产服务器地址。
 - bioRxiv 的版本化 PDF 地址。
+- Silverchair 的带临时 token 水印 PDF 地址。
 
 ## 隐私说明
 
