@@ -4,6 +4,7 @@ import {
   buildFilename,
   extractBioRxivDoi,
   extractDoi,
+  extractOxfordAcademicDoi,
   extractPii,
   extractResearchSquareId,
   extractSilverchairArticleId,
@@ -75,6 +76,13 @@ test("Silverchair article and watermark PDF URLs expose a stable article ID", ()
   assert.equal(extractSilverchairArticleId(articleUrl), "veaf045");
   assert.equal(extractSilverchairArticleId(pdfUrl), "veaf045");
   assert.equal(isLikelyPaperDownload({ mime: "application/octet-stream", url: pdfUrl }), true);
+});
+
+test("Oxford Academic article URLs expose the Crossref DOI fallback", () => {
+  assert.equal(
+    extractOxfordAcademicDoi("https://academic.oup.com/ve/article/11/1/veae114/7931863"),
+    "10.1093/ve/veae114"
+  );
 });
 
 test("URL normalization preserves meaningful PII query parameters", () => {
