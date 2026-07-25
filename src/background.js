@@ -3,6 +3,7 @@ import {
   buildFilename,
   extractBioRxivDoi,
   extractDoi,
+  extractNatureDoi,
   extractOxfordAcademicDoi,
   extractPii,
   extractResearchSquareId,
@@ -212,13 +213,14 @@ async function resolveMetadata(item, settings) {
   const discoveredBioRxivDoi = extractBioRxivDoi(sourceUrls);
   const discoveredResearchSquareDoi = researchSquareDoi(sourceUrls);
   const discoveredOxfordDoi = extractOxfordAcademicDoi(sourceUrls);
+  const discoveredNatureDoi = extractNatureDoi(sourceUrls);
   const discoveredDoi = discoveredBioRxivDoi || extractDoi([
     metadata.doi,
     item.url,
     item.finalUrl,
     item.referrer,
     item.filename
-  ].join(" ")) || discoveredResearchSquareDoi || discoveredOxfordDoi;
+  ].join(" ")) || discoveredResearchSquareDoi || discoveredOxfordDoi || discoveredNatureDoi;
   const discoveredPii = extractPii([
     item.url,
     item.finalUrl,
