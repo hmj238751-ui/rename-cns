@@ -4,6 +4,7 @@ import {
   buildFilename,
   extractBioRxivDoi,
   extractDoi,
+  extractNatureDoi,
   extractOxfordAcademicDoi,
   extractPii,
   extractResearchSquareId,
@@ -82,6 +83,17 @@ test("Oxford Academic article URLs expose the Crossref DOI fallback", () => {
   assert.equal(
     extractOxfordAcademicDoi("https://academic.oup.com/ve/article/11/1/veae114/7931863"),
     "10.1093/ve/veae114"
+  );
+});
+
+test("Nature article PDF URLs expose the 10.1038 DOI fallback", () => {
+  assert.equal(
+    extractNatureDoi("https://www.nature.com/articles/s41586-026-10647-9.pdf"),
+    "10.1038/s41586-026-10647-9"
+  );
+  assert.equal(
+    extractNatureDoi("https://www.nature.com/articles/d41586-026-01739-7.pdf"),
+    "10.1038/d41586-026-01739-7"
   );
 });
 

@@ -12,6 +12,7 @@ const RESEARCH_SQUARE_ID_PATTERN = /\brs-\d{4,}\b/i;
 const SILVERCHAIR_PDF_PATTERN = /(?:^|https?:\/\/)(?:[a-z0-9-]+\.)*silverchair\.com\/([^/?#\s]+)\.pdf(?:[?#\s]|$)/i;
 const SILVERCHAIR_ARTICLE_PAGE_PATTERN = /\/article\/(?:[^/?#\s]+\/)*([^/?#\s]+)\/\d+(?:[/?#\s]|$)/i;
 const OXFORD_ACADEMIC_ARTICLE_PATTERN = /https?:\/\/(?:www\.)?academic\.oup\.com\/([^/?#\s]+)\/article\/(?:[^/?#\s]+\/)*([^/?#\s]+)\/\d+(?:[/?#\s]|$)/i;
+const NATURE_ARTICLE_PATTERN = /(?:^|https?:\/\/)(?:www\.)?nature\.com\/articles\/([a-z]\d{4,}-\d{3}-\d{4,5}-\d+)(?:\.pdf)?(?:[?#\s]|$)/i;
 const MAX_FILENAME_LENGTH = 180;
 
 export function cleanText(value) {
@@ -83,6 +84,17 @@ export function extractOxfordAcademicDoi(value) {
   }
   const match = source.match(OXFORD_ACADEMIC_ARTICLE_PATTERN);
   return match ? `10.1093/${match[1]}/${match[2]}`.toLowerCase() : "";
+}
+
+export function extractNatureDoi(value) {
+  let source = cleanText(value);
+  try {
+    source = decodeURIComponent(source);
+  } catch {
+    // Keep the original URL when a publisher returns a malformed escape sequence.
+  }
+  const match = source.match(NATURE_ARTICLE_PATTERN);
+  return match ? `10.1038/${match[1]}`.toLowerCase() : "";
 }
 
 export function researchSquareDoi(value) {

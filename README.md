@@ -1,6 +1,6 @@
 # 论文文献智能改名
 
-版本：1.05
+版本：1.06
 
 这是一个适用于 Chrome 和 Edge 的浏览器扩展。下载论文时，它会自动将文件命名为：
 
@@ -20,6 +20,7 @@
 - 通过 Crossref 和 PubMed 补全文献元数据。
 - 支持 Cell、Research Square、bioRxiv、Silverchair 水印 PDF 等常见论文下载地址。
 - 对 Oxford Academic 文章页提供 DOI 后备解析，避免页面元数据未加载时无法改名。
+- 支持 Nature 文章编号 PDF 地址，并自动补全对应 DOI。
 
 
 ## 安装
