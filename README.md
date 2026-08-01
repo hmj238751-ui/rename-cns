@@ -1,6 +1,6 @@
 # 论文文献智能改名
 
-版本：1.06
+版本：1.07
 
 这是一个适用于 Chrome 和 Edge 的浏览器扩展。下载论文时，它会自动将文件命名为：
 
@@ -21,6 +21,8 @@
 - 支持 Cell、Research Square、bioRxiv、Silverchair 水印 PDF 等常见论文下载地址。
 - 对 Oxford Academic 文章页提供 DOI 后备解析，避免页面元数据未加载时无法改名。
 - 支持 Nature 文章编号 PDF 地址，并自动补全对应 DOI。
+- 支持 Cell 中含字母的 PII 编号，以及 Nature 文章编号末尾为字母的格式。
+- 修复部分 Cell 和 Nature PDF 地址无法自动改名的问题。
 
 
 ## 安装
