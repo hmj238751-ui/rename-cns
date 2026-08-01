@@ -55,6 +55,14 @@ test("extractPii supports encoded Cell PDF URLs", () => {
     extractPii("https://www.cell.com/action/showPdf?pii=S2211-1247%2826%2900720-5"),
     "S2211-1247(26)00720-5"
   );
+  assert.equal(
+    extractPii("https://www.cell.com/action/showPdf?pii=S0966-842X%2826%2900088-0"),
+    "S0966-842X(26)00088-0"
+  );
+  assert.equal(isLikelyPaperDownload({
+    mime: "application/octet-stream",
+    url: "https://www.cell.com/action/showPdf?pii=S0966-842X%2826%2900088-0"
+  }), true);
 });
 
 test("Research Square URLs expose a stable article ID and DOI", () => {
@@ -87,6 +95,10 @@ test("Oxford Academic article URLs expose the Crossref DOI fallback", () => {
 });
 
 test("Nature article PDF URLs expose the 10.1038 DOI fallback", () => {
+  assert.equal(
+    extractNatureDoi("https://www.nature.com/articles/s41592-026-03085-y.pdf"),
+    "10.1038/s41592-026-03085-y"
+  );
   assert.equal(
     extractNatureDoi("https://www.nature.com/articles/s41586-026-10647-9.pdf"),
     "10.1038/s41586-026-10647-9"

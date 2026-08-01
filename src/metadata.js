@@ -7,12 +7,12 @@ export const DEFAULT_SETTINGS = {
 
 const DOI_PATTERN = /\b10\.\d{4,9}\/[\-._;()/:A-Z0-9]+\b/i;
 const BIORXIV_DOI_PATTERN = /10\.1101\/\d{4}\.\d{2}\.\d{2}\.\d+/i;
-const PII_PATTERN = /\bS\d{4,9}-\d{4}\(\d{2}\)\d{4,6}-[0-9A-Z]+\b/i;
+const PII_PATTERN = /\bS\d{4,9}-[0-9A-Z]{4}\(\d{2}\)\d{4,6}-[0-9A-Z]+\b/i;
 const RESEARCH_SQUARE_ID_PATTERN = /\brs-\d{4,}\b/i;
 const SILVERCHAIR_PDF_PATTERN = /(?:^|https?:\/\/)(?:[a-z0-9-]+\.)*silverchair\.com\/([^/?#\s]+)\.pdf(?:[?#\s]|$)/i;
 const SILVERCHAIR_ARTICLE_PAGE_PATTERN = /\/article\/(?:[^/?#\s]+\/)*([^/?#\s]+)\/\d+(?:[/?#\s]|$)/i;
 const OXFORD_ACADEMIC_ARTICLE_PATTERN = /https?:\/\/(?:www\.)?academic\.oup\.com\/([^/?#\s]+)\/article\/(?:[^/?#\s]+\/)*([^/?#\s]+)\/\d+(?:[/?#\s]|$)/i;
-const NATURE_ARTICLE_PATTERN = /(?:^|https?:\/\/)(?:www\.)?nature\.com\/articles\/([a-z]\d{4,}-\d{3}-\d{4,5}-\d+)(?:\.pdf)?(?:[?#\s]|$)/i;
+const NATURE_ARTICLE_PATTERN = /(?:^|https?:\/\/)(?:www\.)?nature\.com\/articles\/([a-z]\d{4,}-\d{3}-\d{4,5}-[a-z0-9]+)(?:\.pdf)?(?:[?#\s]|$)/i;
 const MAX_FILENAME_LENGTH = 180;
 
 export function cleanText(value) {
@@ -143,7 +143,7 @@ export function isLikelyPaperDownload(item) {
   return /application\/(pdf|epub\+zip|x-djvu|x-caj)/i.test(source)
     || /\.(pdf|epub|djvu|caj)(?:$|[?#\s])/i.test(source)
     || /cell\.com\/action\/showpdf(?:[/?#]|$)/i.test(source)
-    || /[?&]pii=S\d{4,9}-\d{4}\(\d{2}\)\d{4,6}-[0-9a-z]+/i.test(source)
+    || PII_PATTERN.test(source)
     || /researchsquare\.com\/article\/rs-\d+\/(?:v\d+|latest)(?:\.pdf)?(?:[?#]|$)/i.test(source)
     || /biorxiv\.org\/content\/.*(?:\.full)?\.pdf(?:[?#]|$)/i.test(source)
     || /(?:[a-z0-9-]+\.)*silverchair\.com\/[^/?#\s]+\.pdf(?:[?#\s]|$)/i.test(source);
