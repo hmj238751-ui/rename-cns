@@ -2,6 +2,7 @@ export const DEFAULT_SETTINGS = {
   enabled: true,
   useCrossref: true,
   usePubMed: true,
+  useArxiv: true,
   allowFilenameFallback: false
 };
 
@@ -13,6 +14,7 @@ const SILVERCHAIR_PDF_PATTERN = /(?:^|https?:\/\/)(?:[a-z0-9-]+\.)*silverchair\.
 const SILVERCHAIR_ARTICLE_PAGE_PATTERN = /\/article\/(?:[^/?#\s]+\/)*([^/?#\s]+)\/\d+(?:[/?#\s]|$)/i;
 const OXFORD_ACADEMIC_ARTICLE_PATTERN = /https?:\/\/(?:www\.)?academic\.oup\.com\/([^/?#\s]+)\/article\/(?:[^/?#\s]+\/)*([^/?#\s]+)\/\d+(?:[/?#\s]|$)/i;
 const NATURE_ARTICLE_PATTERN = /(?:^|https?:\/\/)(?:www\.)?nature\.com\/articles\/([a-z]\d{4,}-\d{3}-\d{4,5}-[a-z0-9]+)(?:\.pdf)?(?:[?#\s]|$)/i;
+const ARXIV_ID_PATTERN = /(?:arxiv(?:\.org)?\/(?:abs|pdf)\/|arxiv:|(?:^|[\/\s]))(\d{4}\.\d{4,5})(?:v\d+)?(?:\.pdf)?(?=[?#\s/]|$)/i;
 const MAX_FILENAME_LENGTH = 180;
 
 export function cleanText(value) {
@@ -97,6 +99,47 @@ export function extractNatureDoi(value) {
   return match ? `10.1038/${match[1]}`.toLowerCase() : "";
 }
 
+export function extractArxivId(value) {
+  let source = cleanText(value);
+  try {
+    source = decodeURIComponent(source);
+  } catch {
+    // Keep the original URL when a publisher returns a malformed escape sequence.
+  }
+  return source.match(ARXIV_ID_PATTERN)?.[1].toLowerCase() || "";
+}
+
+function decodeXmlEntities(value) {
+  return String(value || "")
+    .replace(/<!\[CDATA\[([\s\S]*?)\]\]>/g, "$1")
+    .replace(/&#x([0-9a-f]+);/gi, (_, code) => String.fromCodePoint(Number.parseInt(code, 16)))
+    .replace(/&#(\d+);/g, (_, code) => String.fromCodePoint(Number.parseInt(code, 10)))
+    .replace(/&lt;/g, "<")
+    .replace(/&gt;/g, ">")
+    .replace(/&quot;/g, '"')
+    .replace(/&apos;/g, "'")
+    .replace(/&amp;/g, "&");
+}
+
+function extractXmlValue(source, tagName) {
+  const escapedTagName = tagName.replace(":", "\\:");
+  const match = source.match(new RegExp(`<${escapedTagName}(?:\\s[^>]*)?>([\\s\\S]*?)<\\/${escapedTagName}>`, "i"));
+  return decodeXmlEntities(match?.[1] || "");
+}
+
+export function arxivXmlToMetadata(xml) {
+  const entry = String(xml || "").match(/<entry\b[\s\S]*?<\/entry>/i)?.[0] || "";
+  if (!entry) return {};
+  const journal = extractXmlValue(entry, "journal_ref");
+  const doi = extractDoi(extractXmlValue(entry, "arxiv:doi"));
+  return {
+    title: extractXmlValue(entry, "title"),
+    journal: journal || "arXiv",
+    year: normalizeYear(extractXmlValue(entry, "published")),
+    doi
+  };
+}
+
 export function researchSquareDoi(value) {
   let source = cleanText(value);
   try {
@@ -144,6 +187,7 @@ export function isLikelyPaperDownload(item) {
     || /\.(pdf|epub|djvu|caj)(?:$|[?#\s])/i.test(source)
     || /cell\.com\/action\/showpdf(?:[/?#]|$)/i.test(source)
     || PII_PATTERN.test(source)
+    || Boolean(extractArxivId(source))
     || /researchsquare\.com\/article\/rs-\d+\/(?:v\d+|latest)(?:\.pdf)?(?:[?#]|$)/i.test(source)
     || /biorxiv\.org\/content\/.*(?:\.full)?\.pdf(?:[?#]|$)/i.test(source)
     || /(?:[a-z0-9-]+\.)*silverchair\.com\/[^/?#\s]+\.pdf(?:[?#\s]|$)/i.test(source);

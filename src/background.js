@@ -1,8 +1,10 @@
 import {
   DEFAULT_SETTINGS,
+  arxivXmlToMetadata,
   buildFilename,
   extractBioRxivDoi,
   extractDoi,
+  extractArxivId,
   extractNatureDoi,
   extractOxfordAcademicDoi,
   extractPii,
@@ -104,6 +106,12 @@ async function readPageMetadata(item) {
     item.finalUrl,
     item.referrer
   ].join(" "));
+  const arxivId = extractArxivId([
+    item.url,
+    item.finalUrl,
+    item.referrer,
+    item.filename
+  ].join(" "));
 
   const exact = records.find((record) => {
     const pageUrl = normalizeComparableUrl(record.pageUrl);
@@ -113,7 +121,8 @@ async function readPageMetadata(item) {
       || (finalUrl && (finalUrl === pageUrl || finalUrl === pdfUrl))
       || (researchSquareId && researchSquareId === extractResearchSquareId(`${record.pageUrl} ${record.pdfUrl}`))
       || (bioRxivDoi && bioRxivDoi === extractBioRxivDoi(`${record.pageUrl} ${record.pdfUrl} ${record.metadata?.doi || ""}`))
-      || (silverchairArticleId && silverchairArticleId === extractSilverchairArticleId(`${record.pageUrl} ${record.pdfUrl}`));
+      || (silverchairArticleId && silverchairArticleId === extractSilverchairArticleId(`${record.pageUrl} ${record.pdfUrl}`))
+      || (arxivId && arxivId === extractArxivId(`${record.pageUrl} ${record.pdfUrl}`));
   });
   return exact?.metadata || {};
 }
@@ -143,6 +152,18 @@ async function fetchJson(url, timeoutMs = 2500) {
     });
     if (!response.ok) throw new Error(`HTTP ${response.status}`);
     return await response.json();
+  } finally {
+    clearTimeout(timer);
+  }
+}
+
+async function fetchText(url, timeoutMs = 5000) {
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), timeoutMs);
+  try {
+    const response = await fetch(url, { signal: controller.signal });
+    if (!response.ok) throw new Error(`HTTP ${response.status}`);
+    return await response.text();
   } finally {
     clearTimeout(timer);
   }
@@ -201,6 +222,12 @@ async function fetchPubmedByPii(pii) {
   };
 }
 
+async function fetchArxivById(arxivId) {
+  const query = encodeURIComponent(arxivId);
+  const xml = await fetchText(`https://export.arxiv.org/api/query?id_list=${query}&max_results=1`);
+  return arxivXmlToMetadata(xml);
+}
+
 async function resolveMetadata(item, settings) {
   let metadata = await readPageMetadata(item);
   const sourceUrls = [
@@ -211,6 +238,7 @@ async function resolveMetadata(item, settings) {
     item.filename
   ].join(" ");
   const discoveredBioRxivDoi = extractBioRxivDoi(sourceUrls);
+  const discoveredArxivId = extractArxivId(sourceUrls);
   const discoveredResearchSquareDoi = researchSquareDoi(sourceUrls);
   const discoveredOxfordDoi = extractOxfordAcademicDoi(sourceUrls);
   const discoveredNatureDoi = extractNatureDoi(sourceUrls);
@@ -232,7 +260,18 @@ async function resolveMetadata(item, settings) {
   if (!metadata.journal && discoveredBioRxivDoi) {
     metadata = { ...metadata, journal: "bioRxiv" };
   }
+  if (!metadata.journal && discoveredArxivId) {
+    metadata = { ...metadata, journal: "arXiv" };
+  }
   if (discoveredDoi && !metadata.doi) metadata = { ...metadata, doi: discoveredDoi };
+
+  if (discoveredArxivId && settings.useArxiv) {
+    try {
+      metadata = mergeMetadata(metadata, await fetchArxivById(discoveredArxivId));
+    } catch (error) {
+      console.warn("arXiv metadata lookup failed", error);
+    }
+  }
 
   if (settings.useCrossref) {
     try {

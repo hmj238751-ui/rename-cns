@@ -1,8 +1,10 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import {
+  arxivXmlToMetadata,
   buildFilename,
   extractBioRxivDoi,
+  extractArxivId,
   extractDoi,
   extractNatureDoi,
   extractOxfordAcademicDoi,
@@ -48,6 +50,35 @@ test("bioRxiv PDF URLs normalize versioned DOI suffixes", () => {
   const url = "https://www.biorxiv.org/content/10.1101/2023.12.15.571823v1.full.pdf";
   assert.equal(extractBioRxivDoi(url), "10.1101/2023.12.15.571823");
   assert.equal(isLikelyPaperDownload({ mime: "application/pdf", url }), true);
+});
+
+test("arXiv PDF URLs expose a stable identifier and metadata parser", () => {
+  assert.equal(extractArxivId("2603.25097v1.pdf"), "2603.25097");
+  assert.equal(
+    extractArxivId("https://arxiv.org/pdf/2603.25097v1"),
+    "2603.25097"
+  );
+  assert.equal(isLikelyPaperDownload({
+    mime: "application/octet-stream",
+    url: "https://arxiv.org/pdf/2603.25097v1",
+    filename: "2603.25097v1.pdf"
+  }), true);
+
+  const metadata = arxivXmlToMetadata(`
+    <feed xmlns="http://www.w3.org/2005/Atom">
+      <entry>
+        <title>ElephantBroker: A Knowledge-Grounded Cognitive Runtime for Trustworthy AI Agents</title>
+        <published>2026-03-26T07:03:12Z</published>
+        <arxiv:doi xmlns:arxiv="http://arxiv.org/schemas/atom">10.1234/example</arxiv:doi>
+      </entry>
+    </feed>
+  `);
+  assert.deepEqual(metadata, {
+    title: "ElephantBroker: A Knowledge-Grounded Cognitive Runtime for Trustworthy AI Agents",
+    journal: "arXiv",
+    year: "2026",
+    doi: "10.1234/example"
+  });
 });
 
 test("extractPii supports encoded Cell PDF URLs", () => {

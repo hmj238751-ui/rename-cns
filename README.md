@@ -1,6 +1,6 @@
 # 论文文献智能改名
 
-版本：1.07
+版本：1.08
 
 这是一个适用于 Chrome 和 Edge 的浏览器扩展。下载论文时，它会自动将文件命名为：
 
@@ -23,6 +23,8 @@
 - 支持 Nature 文章编号 PDF 地址，并自动补全对应 DOI。
 - 支持 Cell 中含字母的 PII 编号，以及 Nature 文章编号末尾为字母的格式。
 - 修复部分 Cell 和 Nature PDF 地址无法自动改名的问题。
+- 支持 arXiv 的 `YYMM.NNNNNv1.pdf` 版本化 PDF 地址，并通过 arXiv API 补全文献标题和年份。
+- arXiv 预印本没有期刊信息时，文件名中的期刊字段使用 `arXiv`。
 
 
 ## 安装
@@ -76,6 +78,7 @@ Windows 用户可以将仓库克隆到“文档”文件夹，再在“加载已
 - Cell 的 PII 下载地址。
 - Research Square 的文章地址和资产服务器地址。
 - bioRxiv 的版本化 PDF 地址。
+- arXiv 的版本化 PDF 地址和 arXiv API 元数据。
 - Silverchair 的带临时 token 水印 PDF 地址。
 
 ## 隐私说明
