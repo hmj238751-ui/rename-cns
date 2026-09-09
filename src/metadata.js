@@ -1,9 +1,14 @@
+export const DEFAULT_FILENAME_TEMPLATE = "{year}-{journal}-{title}";
+
 export const DEFAULT_SETTINGS = {
   enabled: true,
   useCrossref: true,
   usePubMed: true,
   useArxiv: true,
-  allowFilenameFallback: false
+  useAcl: true,
+  allowFilenameFallback: false,
+  filenameTemplate: DEFAULT_FILENAME_TEMPLATE,
+  customFields: []
 };
 
 const DOI_PATTERN = /\b10\.\d{4,9}\/[\-._;()/:A-Z0-9]+\b/i;
@@ -15,7 +20,10 @@ const SILVERCHAIR_ARTICLE_PAGE_PATTERN = /\/article\/(?:[^/?#\s]+\/)*([^/?#\s]+)
 const OXFORD_ACADEMIC_ARTICLE_PATTERN = /https?:\/\/(?:www\.)?academic\.oup\.com\/([^/?#\s]+)\/article\/(?:[^/?#\s]+\/)*([^/?#\s]+)\/\d+(?:[/?#\s]|$)/i;
 const NATURE_ARTICLE_PATTERN = /(?:^|https?:\/\/)(?:www\.)?nature\.com\/articles\/([a-z]\d{4,}-\d{3}-\d{4,5}-[a-z0-9]+)(?:\.pdf)?(?:[?#\s]|$)/i;
 const ARXIV_ID_PATTERN = /(?:arxiv(?:\.org)?\/(?:abs|pdf)\/|arxiv:|(?:^|[\/\s]))(\d{4}\.\d{4,5})(?:v\d+)?(?:\.pdf)?(?=[?#\s/]|$)/i;
+const ACL_ANTHOLOGY_ID_PATTERN = /(?:aclanthology\.org\/|(?:^|[\/\s]))((?:19|20)\d{2}\.[a-z0-9]+(?:-[a-z0-9]+)*\.\d+)(?:\.pdf)?(?=[?#\s/]|$)/i;
+const PMC_ID_PATTERN = /\bPMC\d+\b/i;
 const MAX_FILENAME_LENGTH = 180;
+const BUILT_IN_FILENAME_FIELDS = new Set(["year", "journal", "title", "doi"]);
 
 export function cleanText(value) {
   if (value === undefined || value === null) return "";
@@ -30,9 +38,24 @@ export function normalizeYear(value) {
 }
 
 export function extractDoi(value) {
-  const match = cleanText(value).match(DOI_PATTERN);
+  const source = cleanText(value);
+  const match = source.match(DOI_PATTERN);
   if (!match) return "";
-  return match[0].replace(/[.,;:!?\]})>]+$/g, "");
+  let doi = match[0].replace(/[.,;:!?\]})>]+$/g, "");
+  const followingText = source.slice((match.index || 0) + match[0].length);
+  if (/^\s*:/.test(followingText)) doi = doi.replace(/J?IF$/i, "");
+  return doi;
+}
+
+export function metadataTextToPlainText(value) {
+  return cleanText(String(value || "")
+    .replace(/<[^>]*>/g, " ")
+    .replace(/&nbsp;/gi, " ")
+    .replace(/&amp;/gi, "&")
+    .replace(/&lt;/gi, "<")
+    .replace(/&gt;/gi, ">")
+    .replace(/&quot;/gi, '"')
+    .replace(/&apos;/gi, "'"));
 }
 
 export function extractBioRxivDoi(value) {
@@ -109,6 +132,33 @@ export function extractArxivId(value) {
   return source.match(ARXIV_ID_PATTERN)?.[1].toLowerCase() || "";
 }
 
+export function extractAclAnthologyId(value) {
+  let source = cleanText(value);
+  try {
+    source = decodeURIComponent(source);
+  } catch {
+    // Keep the original URL when a publisher returns a malformed escape sequence.
+  }
+  return source.match(ACL_ANTHOLOGY_ID_PATTERN)?.[1].toLowerCase() || "";
+}
+
+export function extractPmcId(value) {
+  let source = cleanText(value);
+  try {
+    source = decodeURIComponent(source);
+  } catch {
+    // Keep the original URL when a publisher returns a malformed escape sequence.
+  }
+  return source.match(PMC_ID_PATTERN)?.[0].toUpperCase() || "";
+}
+
+export function pmcSummaryApiUrl(pmcId) {
+  const numericId = extractPmcId(pmcId).slice(3);
+  return numericId
+    ? `https://eutils.ncbi.nlm.nih.gov/entrez/eutils/esummary.fcgi?db=pmc&id=${numericId}&retmode=json`
+    : "";
+}
+
 function decodeXmlEntities(value) {
   return String(value || "")
     .replace(/<!\[CDATA\[([\s\S]*?)\]\]>/g, "$1")
@@ -138,6 +188,79 @@ export function arxivXmlToMetadata(xml) {
     year: normalizeYear(extractXmlValue(entry, "published")),
     doi
   };
+}
+
+function extractBibField(source, fieldName) {
+  const match = source.match(new RegExp(`\\b${fieldName}\\s*=\\s*([{"])`, "i"));
+  if (!match) return "";
+
+  const opener = match[1];
+  const start = match.index + match[0].length;
+  let escaped = false;
+  let depth = opener === "{" ? 1 : 0;
+  for (let index = start; index < source.length; index += 1) {
+    const character = source[index];
+    if (opener === '"') {
+      if (character === '"' && !escaped) {
+        return cleanText(source.slice(start, index))
+          .replace(/\\([&%#$])/g, "$1")
+          .replace(/\\"/g, '"')
+          .replace(/[{}]/g, "");
+      }
+      escaped = character === "\\" && !escaped;
+      if (character !== "\\") escaped = false;
+      continue;
+    }
+
+    if (character === "{" && !escaped) depth += 1;
+    if (character === "}" && !escaped) {
+      depth -= 1;
+      if (depth === 0) {
+        return cleanText(source.slice(start, index))
+          .replace(/\\([&%#$])/g, "$1")
+          .replace(/[{}]/g, "");
+      }
+    }
+    escaped = character === "\\" && !escaped;
+    if (character !== "\\") escaped = false;
+  }
+  return "";
+}
+
+export function aclBibToMetadata(bib) {
+  const source = String(bib || "");
+  const title = extractBibField(source, "title");
+  const journal = extractBibField(source, "booktitle") || extractBibField(source, "journal");
+  const year = normalizeYear(extractBibField(source, "year"));
+  const doi = extractDoi(extractBibField(source, "doi"));
+  return { title, journal, year, doi };
+}
+
+export function pmcSummaryToMetadata(record = {}) {
+  const doi = record.articleids?.find((item) => item.idtype === "doi")?.value || "";
+  return {
+    title: cleanText(record.title).replace(/\.$/, ""),
+    journal: cleanText(record.fulljournalname || record.source),
+    year: normalizeYear(record.pubdate || record.epubdate || record.sortdate),
+    doi: extractDoi(doi)
+  };
+}
+
+export async function resolvePmcMetadata(item, settings, metadata, fetchJsonImpl) {
+  const pmcId = extractPmcId([
+    item?.url,
+    item?.finalUrl,
+    item?.referrer,
+    item?.filename
+  ].join(" "));
+  if (!pmcId || !settings?.usePubMed
+    || (metadata?.title && metadata?.journal && metadata?.year && metadata?.doi)) {
+    return metadata;
+  }
+
+  const response = await fetchJsonImpl(pmcSummaryApiUrl(pmcId));
+  const remote = pmcSummaryToMetadata(response.result?.[pmcId.slice(3)]);
+  return mergeMetadata(metadata, remote);
 }
 
 export function researchSquareDoi(value) {
@@ -188,6 +311,7 @@ export function isLikelyPaperDownload(item) {
     || /cell\.com\/action\/showpdf(?:[/?#]|$)/i.test(source)
     || PII_PATTERN.test(source)
     || Boolean(extractArxivId(source))
+    || Boolean(extractAclAnthologyId(source))
     || /researchsquare\.com\/article\/rs-\d+\/(?:v\d+|latest)(?:\.pdf)?(?:[?#]|$)/i.test(source)
     || /biorxiv\.org\/content\/.*(?:\.full)?\.pdf(?:[?#]|$)/i.test(source)
     || /(?:[a-z0-9-]+\.)*silverchair\.com\/[^/?#\s]+\.pdf(?:[?#\s]|$)/i.test(source);
@@ -204,17 +328,108 @@ export function sanitizeFilenamePart(value, fallback) {
   return result || fallback;
 }
 
-export function buildFilename(metadata, originalFilename = "") {
-  const title = sanitizeFilenamePart(metadata?.title, "");
-  if (!title) return "";
+function sanitizeRenderedFilename(value) {
+  return String(value || "")
+    .replace(/[\\/:*?"<>|]/g, "-")
+    .replace(/[\u0000-\u001f]/g, "")
+    .replace(/^[.\s]+|[.\s]+$/g, "");
+}
 
-  const year = sanitizeFilenamePart(normalizeYear(metadata?.year), "UnknownYear");
-  const journal = sanitizeFilenamePart(metadata?.journal, "UnknownJournal");
+export function validateFilenameSettings(settings = {}) {
+  const template = String(settings.filenameTemplate || "").trim();
+  const availableFields = new Set(BUILT_IN_FILENAME_FIELDS);
+  const customNames = new Set();
+  const errors = [];
+  if (!template) {
+    errors.push({ code: "empty_filename_template", field: "filenameTemplate" });
+  } else if (/[{}]/.test(template.replace(/\{[^{}]+\}/g, ""))) {
+    errors.push({ code: "invalid_template_syntax", field: "filenameTemplate" });
+  }
+  for (const field of settings.customFields || []) {
+    const name = cleanText(field?.name);
+    if (!name) {
+      errors.push({ code: "invalid_custom_field_name", field: "" });
+      continue;
+    }
+    if (!/^[\p{L}\p{N}_]+$/u.test(name)) {
+      errors.push({ code: "invalid_custom_field_name", field: name });
+      continue;
+    }
+    const comparableName = name.toLowerCase();
+    if (BUILT_IN_FILENAME_FIELDS.has(comparableName)) {
+      errors.push({ code: "reserved_custom_field_name", field: name });
+      continue;
+    }
+    if (customNames.has(comparableName)) {
+      errors.push({ code: "duplicate_custom_field_name", field: name });
+      continue;
+    }
+    customNames.add(comparableName);
+    availableFields.add(name);
+    if (!cleanText(field?.value)) {
+      errors.push({ code: "empty_custom_field_value", field: name });
+    }
+  }
+
+  const placeholders = template.matchAll(/\{([^{}]+)\}/g);
+  for (const [, name] of placeholders) {
+    if (!availableFields.has(name)) {
+      errors.push({ code: "unknown_template_field", field: name });
+    }
+  }
+  return { valid: errors.length === 0, errors };
+}
+
+export function prepareSettingsUpdate(current = {}, partial = {}) {
+  const settings = { ...DEFAULT_SETTINGS, ...current, ...partial };
+  const validation = validateFilenameSettings(settings);
+  return validation.valid
+    ? { ok: true, settings }
+    : { ok: false, errors: validation.errors };
+}
+
+export function buildFilename(metadata, originalFilename = "", settings = {}) {
+  const template = String(settings.filenameTemplate || "").trim() || DEFAULT_FILENAME_TEMPLATE;
+  const rawBuiltInFields = {
+    year: normalizeYear(metadata?.year),
+    journal: cleanText(metadata?.journal),
+    title: cleanText(metadata?.title),
+    doi: cleanText(metadata?.doi)
+  };
+  const referencedBuiltInFields = [...template.matchAll(/\{([^{}]+)\}/g)]
+    .map(([, name]) => name)
+    .filter((name) => BUILT_IN_FILENAME_FIELDS.has(name));
+  if (referencedBuiltInFields.some((name) => !rawBuiltInFields[name])) {
+    return "";
+  }
+
+  const fields = new Map([
+    ["year", sanitizeFilenamePart(rawBuiltInFields.year, "UnknownYear")],
+    ["journal", sanitizeFilenamePart(rawBuiltInFields.journal, "UnknownJournal")],
+    ["title", sanitizeFilenamePart(rawBuiltInFields.title, "UnknownTitle")],
+    ["doi", sanitizeFilenamePart(rawBuiltInFields.doi, "UnknownDOI")]
+  ]);
+  for (const field of settings.customFields || []) {
+    const name = cleanText(field?.name);
+    if (name) fields.set(name, sanitizeFilenamePart(field?.value, `Unknown${name}`));
+  }
+
+  let hasUnknownField = false;
+  const rendered = template.replace(/\{([^{}]+)\}/g, (placeholder, name) => {
+    if (!fields.has(name)) {
+      hasUnknownField = true;
+      return placeholder;
+    }
+    return fields.get(name);
+  });
+  if (hasUnknownField) return "";
+
   const extension = getFileExtension(originalFilename, metadata?.pdfUrl || "");
-  const prefix = `${year}-${journal}-`;
-  const availableTitleLength = Math.max(40, MAX_FILENAME_LENGTH - prefix.length - extension.length);
-  const shortenedTitle = title.slice(0, availableTitleLength).replace(/[.\s-]+$/g, "");
-  return `${prefix}${shortenedTitle}${extension}`;
+  const basename = sanitizeRenderedFilename(rendered);
+  if (!basename) return "";
+  const availableLength = Math.max(1, MAX_FILENAME_LENGTH - extension.length);
+  const shortened = basename.slice(0, availableLength).replace(/[.\s]+$/g, "");
+  return shortened ? `${shortened}${extension}` : "";
 }
 
 export function mergeMetadata(primary = {}, secondary = {}) {

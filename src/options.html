@@ -16,6 +16,46 @@
       </div>
     </div>
 
+    <h2>文件名规则</h2>
+    <label class="field-label" for="filenameTemplate">文件名模板</label>
+    <input
+      class="text-input"
+      id="filenameTemplate"
+      type="text"
+      autocomplete="off"
+      spellcheck="false"
+      aria-describedby="templateHelp"
+    >
+    <div class="field-help" id="templateHelp">
+      内置字段：<code>{year}</code> <code>{journal}</code> <code>{title}</code> <code>{doi}</code>，可自由调整顺序和分隔符。
+    </div>
+
+    <div class="section-heading">
+      <h2>自定义字段</h2>
+      <button id="addCustomField" type="button">+  添加字段</button>
+    </div>
+    <div class="custom-fields" id="customFields"></div>
+    <template id="customFieldTemplate">
+      <div class="custom-field-row">
+        <label>
+          <span>字段名</span>
+          <input class="text-input custom-field-name" type="text" autocomplete="off" placeholder="例如：项目" aria-label="自定义字段名">
+        </label>
+        <label>
+          <span>固定值</span>
+          <input class="text-input custom-field-value" type="text" autocomplete="off" placeholder="例如：肿瘤研究" aria-label="自定义字段固定值">
+        </label>
+        <button class="remove-field" type="button" aria-label="删除自定义字段">删除</button>
+      </div>
+    </template>
+    <div class="field-help">字段名可使用中文、英文、数字和下划线。添加后，在模板中使用 <code>{字段名}</code>。</div>
+
+    <div class="preview-card" aria-live="polite">
+      <div class="preview-label">文件名预览</div>
+      <div class="preview-value" id="filenamePreview"></div>
+    </div>
+    <div class="error-message" id="settingsError" role="alert" hidden></div>
+
     <h2>元数据来源</h2>
     <label class="setting">
       <input id="useCrossref" type="checkbox">
@@ -23,7 +63,7 @@
     </label>
     <label class="setting">
       <input id="usePubMed" type="checkbox">
-      <span>使用 PubMed 解析 Cell/医学论文 PII<small>适用于 Cell 的 `showPdf?pii=...` 下载地址，可把 PII 转换成标题、期刊、年份和 DOI。</small></span>
+      <span>使用 NCBI/PubMed 补全医学论文元数据<small>支持 Cell 的 PII 下载地址和 PMC 论文直接 PDF 地址。</small></span>
     </label>
     <label class="setting">
       <input id="allowFilenameFallback" type="checkbox">
@@ -36,6 +76,6 @@
       <span class="muted" id="saved"></span>
     </div>
   </main>
-  <script src="options.js"></script>
+  <script type="module" src="options.js"></script>
 </body>
 </html>

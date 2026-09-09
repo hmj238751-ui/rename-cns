@@ -37,8 +37,10 @@ function renderHistory(history) {
 async function render() {
   const result = await send({ type: "GET_STATUS" });
   const enabled = Boolean(result?.settings?.enabled);
+  const filenameTemplate = result?.settings?.filenameTemplate || "{year}-{journal}-{title}";
   document.querySelector("#enabled").checked = enabled;
   document.querySelector("#statusText").textContent = enabled ? "正在监听论文下载" : "已暂停自动改名";
+  document.querySelector("#formatNote").textContent = `当前命名模板：${filenameTemplate}`;
   renderHistory(result?.history || []);
 }
 

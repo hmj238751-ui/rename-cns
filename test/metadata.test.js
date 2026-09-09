@@ -1,10 +1,13 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import {
+  DEFAULT_SETTINGS,
+  aclBibToMetadata,
   arxivXmlToMetadata,
   buildFilename,
   extractBioRxivDoi,
   extractArxivId,
+  extractAclAnthologyId,
   extractDoi,
   extractNatureDoi,
   extractOxfordAcademicDoi,
@@ -12,6 +15,7 @@ import {
   extractResearchSquareId,
   extractSilverchairArticleId,
   isLikelyPaperDownload,
+  metadataTextToPlainText,
   normalizeComparableUrl,
   researchSquareDoi,
   titleSimilarity
@@ -39,10 +43,207 @@ test("buildFilename removes unsupported filename characters and limits length", 
   assert.equal(filename.length <= 180, true);
 });
 
+test("buildFilename renders a custom template with fixed custom fields", () => {
+  const filename = buildFilename({
+    year: "2024",
+    journal: "Nature Medicine",
+    title: "Deep learning: a clinical study",
+    doi: "10.1000/example"
+  }, "download.pdf", {
+    filenameTemplate: "{year}_{项目}_{title}_{doi}",
+    customFields: [{ name: "项目", value: "肿瘤研究" }]
+  });
+
+  assert.equal(
+    filename,
+    "2024_肿瘤研究_Deep learning-a clinical study_10.1000-example.pdf"
+  );
+});
+
+test("buildFilename preserves separators chosen in the template", () => {
+  const filename = buildFilename({ year: "2026", title: "Paper" }, "paper.pdf", {
+    filenameTemplate: "{year}--{title}",
+    customFields: []
+  });
+
+  assert.equal(filename, "2026--Paper.pdf");
+});
+
+test("buildFilename keeps the original name when any referenced metadata field is missing", () => {
+  const filename = buildFilename({ year: "2026" }, "paper.epub", {
+    filenameTemplate: "{year}_{journal}_{title}_{doi}",
+    customFields: []
+  });
+
+  assert.equal(filename, "");
+});
+
+test("buildFilename keeps the original name when every referenced metadata field is missing", () => {
+  const filename = buildFilename(
+    {},
+    "13023_2024_Article_3065.pdf",
+    DEFAULT_SETTINGS
+  );
+
+  assert.equal(filename, "");
+});
+
+test("buildFilename limits custom template output to 180 characters", () => {
+  const filename = buildFilename({ title: "Long title ".repeat(40) }, "paper.pdf", {
+    filenameTemplate: "ARCHIVE_{title}",
+    customFields: []
+  });
+
+  assert.equal(filename.startsWith("ARCHIVE_"), true);
+  assert.equal(filename.endsWith(".pdf"), true);
+  assert.equal(filename.length <= 180, true);
+});
+
+test("filename settings reject template placeholders that are not defined", async () => {
+  const metadataModule = await import("../src/metadata.js");
+  const result = metadataModule.validateFilenameSettings?.({
+    filenameTemplate: "{year}-{未定义}-{title}",
+    customFields: []
+  });
+
+  assert.deepEqual(result, {
+    valid: false,
+    errors: [{ code: "unknown_template_field", field: "未定义" }]
+  });
+});
+
+test("filename settings reject custom names reserved for built-in fields", async () => {
+  const { validateFilenameSettings } = await import("../src/metadata.js");
+  const result = validateFilenameSettings({
+    filenameTemplate: "{year}-{title}",
+    customFields: [{ name: "Year", value: "manual" }]
+  });
+
+  assert.deepEqual(result, {
+    valid: false,
+    errors: [{ code: "reserved_custom_field_name", field: "Year" }]
+  });
+});
+
+test("filename settings reject duplicate custom field names", async () => {
+  const { validateFilenameSettings } = await import("../src/metadata.js");
+  const result = validateFilenameSettings({
+    filenameTemplate: "{项目}-{title}",
+    customFields: [
+      { name: "项目", value: "肿瘤研究" },
+      { name: "项目", value: "蛋白质组" }
+    ]
+  });
+
+  assert.deepEqual(result, {
+    valid: false,
+    errors: [{ code: "duplicate_custom_field_name", field: "项目" }]
+  });
+});
+
+test("filename settings reject custom field names with separators", async () => {
+  const { validateFilenameSettings } = await import("../src/metadata.js");
+  const result = validateFilenameSettings({
+    filenameTemplate: "{year}-{title}",
+    customFields: [{ name: "project-name", value: "肿瘤研究" }]
+  });
+
+  assert.deepEqual(result, {
+    valid: false,
+    errors: [{ code: "invalid_custom_field_name", field: "project-name" }]
+  });
+});
+
+test("filename settings require a non-empty template", async () => {
+  const { validateFilenameSettings } = await import("../src/metadata.js");
+  const result = validateFilenameSettings({ filenameTemplate: "   ", customFields: [] });
+
+  assert.deepEqual(result, {
+    valid: false,
+    errors: [{ code: "empty_filename_template", field: "filenameTemplate" }]
+  });
+});
+
+test("filename settings require every custom field to have a name", async () => {
+  const { validateFilenameSettings } = await import("../src/metadata.js");
+  const result = validateFilenameSettings({
+    filenameTemplate: "{year}-{title}",
+    customFields: [{ name: "", value: "肿瘤研究" }]
+  });
+
+  assert.deepEqual(result, {
+    valid: false,
+    errors: [{ code: "invalid_custom_field_name", field: "" }]
+  });
+});
+
+test("filename settings require every custom field to have a fixed value", async () => {
+  const { validateFilenameSettings } = await import("../src/metadata.js");
+  const result = validateFilenameSettings({
+    filenameTemplate: "{项目}-{title}",
+    customFields: [{ name: "项目", value: "   " }]
+  });
+
+  assert.deepEqual(result, {
+    valid: false,
+    errors: [{ code: "empty_custom_field_value", field: "项目" }]
+  });
+});
+
+test("filename settings reject unmatched template braces", async () => {
+  const { validateFilenameSettings } = await import("../src/metadata.js");
+  const result = validateFilenameSettings({
+    filenameTemplate: "{year}-{title",
+    customFields: []
+  });
+
+  assert.deepEqual(result, {
+    valid: false,
+    errors: [{ code: "invalid_template_syntax", field: "filenameTemplate" }]
+  });
+});
+
+test("settings updates reject invalid filename configuration before persistence", async () => {
+  const metadataModule = await import("../src/metadata.js");
+  const result = metadataModule.prepareSettingsUpdate?.({
+    enabled: true,
+    filenameTemplate: "{year}-{title}",
+    customFields: []
+  }, {
+    filenameTemplate: "{year}-{未定义}"
+  });
+
+  assert.deepEqual(result, {
+    ok: false,
+    errors: [{ code: "unknown_template_field", field: "未定义" }]
+  });
+});
+
+test("settings updates supply filename defaults when upgrading existing settings", async () => {
+  const { prepareSettingsUpdate } = await import("../src/metadata.js");
+  const result = prepareSettingsUpdate({ enabled: true }, { enabled: false });
+
+  assert.equal(result.ok, true);
+  assert.equal(result.settings.filenameTemplate, DEFAULT_SETTINGS.filenameTemplate);
+  assert.deepEqual(result.settings.customFields, []);
+  assert.equal(result.settings.enabled, false);
+});
+
 test("extractDoi supports DOI URLs and strips punctuation", () => {
   assert.equal(
     extractDoi("See https://doi.org/10.1038/s41586-024-01234-5."),
     "10.1038/s41586-024-01234-5"
+  );
+  assert.equal(
+    extractDoi("https://doi.org/10.1038/s42256-026-01266-0IF: 29.8 Q1"),
+    "10.1038/s42256-026-01266-0"
+  );
+});
+
+test("Crossref metadata markup is converted to plain filename text", () => {
+  assert.equal(
+    metadataTextToPlainText("Four healthy lifestyle behaviours and adult-onset <scp>AD</scp> risk: A&nbsp;prospective Study"),
+    "Four healthy lifestyle behaviours and adult-onset AD risk: A prospective Study"
   );
 });
 
@@ -50,6 +251,156 @@ test("bioRxiv PDF URLs normalize versioned DOI suffixes", () => {
   const url = "https://www.biorxiv.org/content/10.1101/2023.12.15.571823v1.full.pdf";
   assert.equal(extractBioRxivDoi(url), "10.1101/2023.12.15.571823");
   assert.equal(isLikelyPaperDownload({ mime: "application/pdf", url }), true);
+});
+
+test("PMC article and PDF URLs expose a stable PMC identifier", async () => {
+  const metadataModule = await import("../src/metadata.js");
+  const extractPmcId = metadataModule.extractPmcId;
+
+  assert.equal(
+    extractPmcId?.("https://pmc.ncbi.nlm.nih.gov/articles/PMC10921669/"),
+    "PMC10921669"
+  );
+  assert.equal(
+    extractPmcId?.("https://pmc.ncbi.nlm.nih.gov/articles/PMC10921669/pdf/13023_2024_Article_3065.pdf"),
+    "PMC10921669"
+  );
+});
+
+test("PMC summary metadata supplies title, journal, year, and DOI", async () => {
+  const metadataModule = await import("../src/metadata.js");
+  const metadata = metadataModule.pmcSummaryToMetadata?.({
+    uid: "10921669",
+    pubdate: "2024 Mar 8",
+    epubdate: "2024 Mar 8",
+    source: "Orphanet J Rare Dis",
+    title: "Structural brain abnormalities in Pallister-Killian syndrome: a neuroimaging study of 31 children.",
+    articleids: [
+      { idtype: "pmid", value: "38459574" },
+      { idtype: "pmcid", value: "PMC10921669" },
+      { idtype: "doi", value: "10.1186/s13023-024-03065-5" }
+    ],
+    fulljournalname: "Orphanet journal of rare diseases",
+    sortdate: "2024/03/08 00:00"
+  });
+
+  assert.deepEqual(metadata, {
+    title: "Structural brain abnormalities in Pallister-Killian syndrome: a neuroimaging study of 31 children",
+    journal: "Orphanet journal of rare diseases",
+    year: "2024",
+    doi: "10.1186/s13023-024-03065-5"
+  });
+});
+
+test("PMC summary API URL uses the numeric identifier expected by NCBI", async () => {
+  const metadataModule = await import("../src/metadata.js");
+
+  assert.equal(
+    metadataModule.pmcSummaryApiUrl?.("PMC10921669"),
+    "https://eutils.ncbi.nlm.nih.gov/entrez/eutils/esummary.fcgi?db=pmc&id=10921669&retmode=json"
+  );
+});
+
+test("direct PMC PDF metadata resolves through NCBI before filename generation", async () => {
+  const metadataModule = await import("../src/metadata.js");
+  const requestedUrls = [];
+  const item = {
+    url: "https://pmc.ncbi.nlm.nih.gov/articles/PMC10921669/pdf/13023_2024_Article_3065.pdf",
+    finalUrl: "",
+    referrer: "",
+    filename: "13023_2024_Article_3065.pdf"
+  };
+  const metadata = await metadataModule.resolvePmcMetadata?.(
+    item,
+    DEFAULT_SETTINGS,
+    {},
+    async (url) => {
+      requestedUrls.push(url);
+      return {
+        result: {
+          uids: ["10921669"],
+          "10921669": {
+            uid: "10921669",
+            pubdate: "2024 Mar 8",
+            source: "Orphanet J Rare Dis",
+            title: "Structural brain abnormalities in Pallister-Killian syndrome: a neuroimaging study of 31 children.",
+            articleids: [
+              { idtype: "pmid", value: "38459574" },
+              { idtype: "pmcid", value: "PMC10921669" },
+              { idtype: "doi", value: "10.1186/s13023-024-03065-5" }
+            ],
+            fulljournalname: "Orphanet journal of rare diseases"
+          }
+        }
+      };
+    }
+  );
+
+  assert.deepEqual({
+    requestedUrl: requestedUrls[0],
+    filename: buildFilename(metadata, item.filename, DEFAULT_SETTINGS)
+  }, {
+    requestedUrl: "https://eutils.ncbi.nlm.nih.gov/entrez/eutils/esummary.fcgi?db=pmc&id=10921669&retmode=json",
+    filename: "2024-Orphanet journal of rare diseases-Structural brain abnormalities in Pallister-Killian syndrome-a neuroimaging study of 31 children.pdf"
+  });
+});
+
+test("PMC metadata lookup preserves non-empty fields captured from the article page", async () => {
+  const { resolvePmcMetadata } = await import("../src/metadata.js");
+  const metadata = await resolvePmcMetadata(
+    {
+      url: "https://pmc.ncbi.nlm.nih.gov/articles/PMC10921669/pdf/13023_2024_Article_3065.pdf",
+      filename: "13023_2024_Article_3065.pdf"
+    },
+    DEFAULT_SETTINGS,
+    { title: "Cached canonical title", journal: "", year: "", doi: "" },
+    async () => ({
+      result: {
+        "10921669": {
+          pubdate: "2024 Mar 8",
+          title: "Remote title.",
+          articleids: [{ idtype: "doi", value: "10.1186/s13023-024-03065-5" }],
+          fulljournalname: "Orphanet journal of rare diseases"
+        }
+      }
+    })
+  );
+
+  assert.deepEqual(metadata, {
+    title: "Cached canonical title",
+    journal: "Orphanet journal of rare diseases",
+    year: "2024",
+    doi: "10.1186/s13023-024-03065-5"
+  });
+});
+
+test("PMC metadata lookup fills a missing DOI for DOI-based templates", async () => {
+  const { resolvePmcMetadata } = await import("../src/metadata.js");
+  const metadata = await resolvePmcMetadata(
+    {
+      url: "https://pmc.ncbi.nlm.nih.gov/articles/PMC10921669/pdf/13023_2024_Article_3065.pdf",
+      filename: "13023_2024_Article_3065.pdf"
+    },
+    DEFAULT_SETTINGS,
+    {
+      title: "Cached title",
+      journal: "Cached journal",
+      year: "2024",
+      doi: ""
+    },
+    async () => ({
+      result: {
+        "10921669": {
+          pubdate: "2024 Mar 8",
+          title: "Remote title.",
+          articleids: [{ idtype: "doi", value: "10.1186/s13023-024-03065-5" }],
+          fulljournalname: "Remote journal"
+        }
+      }
+    })
+  );
+
+  assert.equal(metadata.doi, "10.1186/s13023-024-03065-5");
 });
 
 test("arXiv PDF URLs expose a stable identifier and metadata parser", () => {
@@ -78,6 +429,34 @@ test("arXiv PDF URLs expose a stable identifier and metadata parser", () => {
     journal: "arXiv",
     year: "2026",
     doi: "10.1234/example"
+  });
+});
+
+test("ACL Anthology PDF URLs expose a stable identifier and BibTeX metadata", () => {
+  assert.equal(
+    extractAclAnthologyId("https://aclanthology.org/2026.acl-long.981.pdf"),
+    "2026.acl-long.981"
+  );
+  assert.equal(extractAclAnthologyId("2026.acl-long.981.pdf"), "2026.acl-long.981");
+  assert.equal(isLikelyPaperDownload({
+    mime: "application/pdf",
+    url: "https://aclanthology.org/2026.acl-long.981.pdf",
+    filename: "2026.acl-long.981.pdf"
+  }), true);
+
+  const metadata = aclBibToMetadata(`
+    @inproceedings{yu-etal-2026-agentic,
+      title = "Agentic Memory: Learning Unified Long-Term and Short-Term Memory Management for Large Language Model Agents",
+      booktitle = "Proceedings of the 64th Annual Meeting of the Association for Computational Linguistics (Volume 1: Long Papers)",
+      year = "2026",
+      doi = "10.18653/v1/2026.acl-long.981"
+    }
+  `);
+  assert.deepEqual(metadata, {
+    title: "Agentic Memory: Learning Unified Long-Term and Short-Term Memory Management for Large Language Model Agents",
+    journal: "Proceedings of the 64th Annual Meeting of the Association for Computational Linguistics (Volume 1: Long Papers)",
+    year: "2026",
+    doi: "10.18653/v1/2026.acl-long.981"
   });
 });
 

@@ -5,6 +5,16 @@
     return String(value || "").replace(/\s+/g, " ").trim();
   }
 
+  function extractDoi(value) {
+    const source = clean(value);
+    const match = source.match(DOI_PATTERN);
+    if (!match) return "";
+    let doi = match[0].replace(/[.,;:!?\]})>]+$/g, "");
+    const followingText = source.slice((match.index || 0) + match[0].length);
+    if (/^\s*:/.test(followingText)) doi = doi.replace(/J?IF$/i, "");
+    return doi;
+  }
+
   function firstMeta(names) {
     for (const name of names) {
       const selector = `meta[name="${CSS.escape(name)}"], meta[property="${CSS.escape(name)}"]`;
@@ -75,7 +85,8 @@
       || jsonLdText(article.publisher, "name")
       || (/researchsquare\.com$/i.test(location.hostname) ? "Research Square" : "")
       || (/biorxiv\.org$/i.test(location.hostname) ? "bioRxiv" : "")
-      || (/arxiv\.org$/i.test(location.hostname) ? "arXiv" : "");
+      || (/arxiv\.org$/i.test(location.hostname) ? "arXiv" : "")
+      || (/aclanthology\.org$/i.test(location.hostname) ? "ACL" : "");
     const date = firstMeta([
       "citation_publication_date",
       "citation_date",
@@ -89,7 +100,9 @@
       || jsonLdText(article, "identifier")
       || document.querySelector('a[href*="doi.org"], link[href*="doi.org"]')?.href
       || location.href;
-    const doi = doiSource.match(DOI_PATTERN)?.[0]?.replace(/[.,;:!?\]})>]+$/g, "") || "";
+    const isAbleSci = /(^|\.)ablesci\.com$/i.test(location.hostname);
+    const doi = extractDoi(doiSource)
+      || (isAbleSci ? extractDoi(document.body?.innerText) : "");
     const pdfUrl = firstMeta(["citation_pdf_url"])
       || document.querySelector('link[type="application/pdf"]')?.href
       || "";
@@ -123,7 +136,12 @@
     const link = event.target.closest?.("a[href]");
     if (!link) return;
     const href = link.href || "";
-    if (/\.pdf(?:$|[?#])/i.test(href) || /application\/pdf/i.test(link.type || "")) {
+    const isAbleSciDownload = /(^|\.)ablesci\.com$/i.test(location.hostname)
+      && /下载|download/i.test(clean(link.textContent));
+    if (/\.pdf(?:$|[?#])/i.test(href)
+      || /application\/pdf/i.test(link.type || "")
+      || link.hasAttribute("download")
+      || isAbleSciDownload) {
       sendMetadata(href);
     }
   }, true);
