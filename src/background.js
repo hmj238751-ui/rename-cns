@@ -1,22 +1,29 @@
 import {
   DEFAULT_SETTINGS,
+  aclBibToMetadata,
   arxivXmlToMetadata,
   buildFilename,
   extractBioRxivDoi,
   extractDoi,
   extractArxivId,
+  extractAclAnthologyId,
   extractNatureDoi,
   extractOxfordAcademicDoi,
   extractPii,
+  extractPmcId,
   extractResearchSquareId,
   extractSilverchairArticleId,
   filenameToTitle,
   isLikelyPaperDownload,
+  metadataTextToPlainText,
   mergeMetadata,
   normalizeComparableUrl,
+  prepareSettingsUpdate,
   researchSquareDoi,
+  resolvePmcMetadata,
   titleSimilarity
 } from "./metadata.js";
+import { fetchWithRetry } from "./network.js";
 
 const SETTINGS_KEY = "settings";
 const PAGE_METADATA_KEY = "pageMetadataCache";
@@ -34,10 +41,11 @@ async function getSettings() {
 }
 
 async function saveSettings(partial) {
-  const settings = { ...(await getSettings()), ...partial };
-  await chrome.storage.local.set({ [SETTINGS_KEY]: settings });
-  await updateBadge(settings);
-  return settings;
+  const update = prepareSettingsUpdate(await getSettings(), partial);
+  if (!update.ok) return update;
+  await chrome.storage.local.set({ [SETTINGS_KEY]: update.settings });
+  await updateBadge(update.settings);
+  return update;
 }
 
 async function updateBadge(settings) {
@@ -112,6 +120,18 @@ async function readPageMetadata(item) {
     item.referrer,
     item.filename
   ].join(" "));
+  const aclAnthologyId = extractAclAnthologyId([
+    item.url,
+    item.finalUrl,
+    item.referrer,
+    item.filename
+  ].join(" "));
+  const pmcId = extractPmcId([
+    item.url,
+    item.finalUrl,
+    item.referrer,
+    item.filename
+  ].join(" "));
 
   const exact = records.find((record) => {
     const pageUrl = normalizeComparableUrl(record.pageUrl);
@@ -122,7 +142,9 @@ async function readPageMetadata(item) {
       || (researchSquareId && researchSquareId === extractResearchSquareId(`${record.pageUrl} ${record.pdfUrl}`))
       || (bioRxivDoi && bioRxivDoi === extractBioRxivDoi(`${record.pageUrl} ${record.pdfUrl} ${record.metadata?.doi || ""}`))
       || (silverchairArticleId && silverchairArticleId === extractSilverchairArticleId(`${record.pageUrl} ${record.pdfUrl}`))
-      || (arxivId && arxivId === extractArxivId(`${record.pageUrl} ${record.pdfUrl}`));
+      || (arxivId && arxivId === extractArxivId(`${record.pageUrl} ${record.pdfUrl}`))
+      || (aclAnthologyId && aclAnthologyId === extractAclAnthologyId(`${record.pageUrl} ${record.pdfUrl}`))
+      || (pmcId && pmcId === extractPmcId(`${record.pageUrl} ${record.pdfUrl}`));
   });
   return exact?.metadata || {};
 }
@@ -142,31 +164,18 @@ async function recordRename(item, filename, metadata) {
   await chrome.storage.local.set({ [HISTORY_KEY]: history.slice(0, MAX_HISTORY_RECORDS) });
 }
 
-async function fetchJson(url, timeoutMs = 2500) {
-  const controller = new AbortController();
-  const timer = setTimeout(() => controller.abort(), timeoutMs);
-  try {
-    const response = await fetch(url, {
-      signal: controller.signal,
-      headers: { Accept: "application/json" }
-    });
-    if (!response.ok) throw new Error(`HTTP ${response.status}`);
-    return await response.json();
-  } finally {
-    clearTimeout(timer);
-  }
+async function fetchJson(url, timeoutMs = 8000) {
+  const response = await fetchWithRetry(url, {
+    timeoutMs,
+    retries: 1,
+    headers: { Accept: "application/json" }
+  });
+  return await response.json();
 }
 
-async function fetchText(url, timeoutMs = 5000) {
-  const controller = new AbortController();
-  const timer = setTimeout(() => controller.abort(), timeoutMs);
-  try {
-    const response = await fetch(url, { signal: controller.signal });
-    if (!response.ok) throw new Error(`HTTP ${response.status}`);
-    return await response.text();
-  } finally {
-    clearTimeout(timer);
-  }
+async function fetchText(url, timeoutMs = 8000) {
+  const response = await fetchWithRetry(url, { timeoutMs, retries: 1 });
+  return await response.text();
 }
 
 function crossrefMessageToMetadata(message) {
@@ -176,8 +185,8 @@ function crossrefMessageToMetadata(message) {
     || message.issued?.["date-parts"]?.[0]
     || [];
   return {
-    title: message.title?.[0] || "",
-    journal: message["container-title"]?.[0] || "",
+    title: metadataTextToPlainText(message.title?.[0]),
+    journal: metadataTextToPlainText(message["container-title"]?.[0]),
     year: dateParts[0] ? String(dateParts[0]) : "",
     doi: message.DOI || "",
     pdfUrl: message.link?.find((link) => link["content-type"] === "application/pdf")?.URL || ""
@@ -228,6 +237,11 @@ async function fetchArxivById(arxivId) {
   return arxivXmlToMetadata(xml);
 }
 
+async function fetchAclAnthologyById(aclAnthologyId) {
+  const bib = await fetchText(`https://aclanthology.org/${encodeURIComponent(aclAnthologyId)}.bib`);
+  return aclBibToMetadata(bib);
+}
+
 async function resolveMetadata(item, settings) {
   let metadata = await readPageMetadata(item);
   const sourceUrls = [
@@ -239,6 +253,7 @@ async function resolveMetadata(item, settings) {
   ].join(" ");
   const discoveredBioRxivDoi = extractBioRxivDoi(sourceUrls);
   const discoveredArxivId = extractArxivId(sourceUrls);
+  const discoveredAclAnthologyId = extractAclAnthologyId(sourceUrls);
   const discoveredResearchSquareDoi = researchSquareDoi(sourceUrls);
   const discoveredOxfordDoi = extractOxfordAcademicDoi(sourceUrls);
   const discoveredNatureDoi = extractNatureDoi(sourceUrls);
@@ -263,6 +278,10 @@ async function resolveMetadata(item, settings) {
   if (!metadata.journal && discoveredArxivId) {
     metadata = { ...metadata, journal: "arXiv" };
   }
+  if (!metadata.journal && discoveredAclAnthologyId) {
+    const venue = discoveredAclAnthologyId.split(".")[1]?.split("-")[0] || "ACL Anthology";
+    metadata = { ...metadata, journal: venue.toUpperCase() };
+  }
   if (discoveredDoi && !metadata.doi) metadata = { ...metadata, doi: discoveredDoi };
 
   if (discoveredArxivId && settings.useArxiv) {
@@ -273,10 +292,25 @@ async function resolveMetadata(item, settings) {
     }
   }
 
+  if (discoveredAclAnthologyId && settings.useAcl) {
+    try {
+      metadata = mergeMetadata(metadata, await fetchAclAnthologyById(discoveredAclAnthologyId));
+    } catch (error) {
+      console.warn("ACL Anthology metadata lookup failed", error);
+    }
+  }
+
+  try {
+    metadata = await resolvePmcMetadata(item, settings, metadata, fetchJson);
+  } catch (error) {
+    console.warn("PMC metadata lookup failed", error);
+  }
+
   if (settings.useCrossref) {
     try {
-      const remote = discoveredDoi
-        ? await fetchCrossrefByDoi(discoveredDoi)
+      const resolvedDoi = discoveredDoi || metadata.doi;
+      const remote = resolvedDoi
+        ? await fetchCrossrefByDoi(resolvedDoi)
         : metadata.title && (!metadata.year || !metadata.journal)
           ? await fetchCrossrefByTitle(metadata.title)
           : {};
@@ -309,7 +343,7 @@ async function handleDeterminingFilename(item, suggest) {
     }
 
     const metadata = await resolveMetadata(item, settings);
-    const filename = buildFilename(metadata, item.filename || item.url);
+    const filename = buildFilename(metadata, item.filename || item.url, settings);
     if (!filename) {
       suggest();
       return;
@@ -350,7 +384,7 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
   }
 
   if (message?.type === "SET_SETTINGS") {
-    void saveSettings(message.settings || {}).then((settings) => sendResponse({ settings }));
+    void saveSettings(message.settings || {}).then(sendResponse);
     return true;
   }
 

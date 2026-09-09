@@ -1,8 +1,8 @@
 {
   "manifest_version": 3,
   "name": "论文文献智能改名",
-  "version": "1.0.8",
-  "description": "自动将论文下载文件命名为年份-期刊-标题。 Automatically rename downloaded papers as year-journal-title.",
+  "version": "1.0.12",
+  "description": "根据可自定义模板自动重命名下载的论文文件。 Automatically rename downloaded papers with customizable templates.",
   "permissions": [
     "downloads",
     "storage"
@@ -10,7 +10,8 @@
   "host_permissions": [
     "https://api.crossref.org/*",
     "https://eutils.ncbi.nlm.nih.gov/*",
-    "https://export.arxiv.org/*"
+    "https://export.arxiv.org/*",
+    "https://aclanthology.org/*"
   ],
   "background": {
     "service_worker": "src/background.js",

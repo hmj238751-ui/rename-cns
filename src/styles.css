@@ -37,6 +37,36 @@ button, input { font: inherit; }
 h1 { margin: 0; font-size: 18px; letter-spacing: .01em; }
 h2 { margin: 28px 0 12px; font-size: 14px; }
 .muted { color: #718078; font-size: 12px; line-height: 1.6; }
+.field-label { display: block; margin-bottom: 7px; font-size: 13px; font-weight: 650; }
+.text-input {
+  width: 100%; padding: 9px 10px; border: 1px solid #cfdcd2; border-radius: 9px;
+  color: #1d2a24; background: #fff; font-size: 13px;
+}
+.text-input:focus-visible, button:focus-visible {
+  outline: 3px solid rgba(59, 147, 97, .25); outline-offset: 2px;
+}
+.text-input[aria-invalid="true"] { border-color: #bd3b3b; }
+.field-help { margin-top: 7px; color: #718078; font-size: 12px; line-height: 1.6; }
+code { padding: 1px 4px; border-radius: 4px; color: #285c40; background: #edf5ef; }
+.section-heading { display: flex; align-items: center; justify-content: space-between; gap: 16px; margin-top: 28px; }
+.section-heading h2 { margin: 0; }
+.custom-fields { display: grid; gap: 10px; margin-top: 12px; }
+.custom-fields:empty::after {
+  content: "还没有自定义字段。"; padding: 12px; border: 1px dashed #cfdcd2;
+  border-radius: 10px; color: #718078; font-size: 12px; text-align: center;
+}
+.custom-field-row {
+  display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1.4fr) auto;
+  align-items: end; gap: 8px; padding: 12px; border: 1px solid #e1eae3; border-radius: 12px;
+  background: #fafcf9;
+}
+.custom-field-row label span { display: block; margin-bottom: 5px; color: #52645a; font-size: 11px; }
+.remove-field { margin-bottom: 1px; color: #9b3535; border-color: #e7caca; }
+.remove-field:hover { background: #fff3f3; }
+.preview-card { margin-top: 18px; padding: 13px 14px; border-radius: 11px; background: #f0f7f1; }
+.preview-label { color: #52645a; font-size: 11px; font-weight: 650; }
+.preview-value { margin-top: 5px; color: #284f39; font-size: 12px; line-height: 1.6; overflow-wrap: anywhere; }
+.error-message { margin-top: 12px; padding: 10px 12px; border-radius: 9px; color: #8a2929; background: #fff0f0; font-size: 12px; line-height: 1.5; }
 .status-card {
   display: flex; align-items: center; justify-content: space-between;
   gap: 16px; margin-top: 18px; padding: 14px 16px;
@@ -61,9 +91,19 @@ h2 { margin: 28px 0 12px; font-size: 14px; }
 .button-row { display: flex; justify-content: flex-end; gap: 8px; margin-top: 20px; }
 button {
   padding: 8px 12px; border: 1px solid #cfe0d3; border-radius: 9px;
-  color: #2a6443; background: #fff; cursor: pointer; font-size: 12px;
+  color: #2a6443; background: #fff; cursor: pointer; font-size: 12px; transition: background-color .2s, border-color .2s;
 }
 button:hover { background: #f0f7f1; }
 .primary { border-color: #3b9361; color: #fff; background: #3b9361; }
 .primary:hover { background: #2f7d50; }
 .note { margin-top: 20px; padding: 12px; border-radius: 10px; color: #5d6d63; background: #fafcf9; font-size: 12px; line-height: 1.6; }
+
+@media (max-width: 560px) {
+  .page { width: calc(100vw - 24px); margin: 12px auto; padding: 20px; border-radius: 14px; }
+  .custom-field-row { grid-template-columns: 1fr; align-items: stretch; }
+  .remove-field { justify-self: end; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after { scroll-behavior: auto !important; transition-duration: .01ms !important; }
+}
